@@ -18,6 +18,30 @@ export default function Login() {
       if (isSignUp) {
         console.log('Attempting signup with:', { email }) // Don't log password
         
+        // First try if the user exists with a fake password sign-in attempt 
+        try {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password: 'not-a-real-password',
+          })
+          
+          if (signInError) {
+            // If error message contains "Invalid login credentials" but not "Email not confirmed",
+            // it means the user exists but password is wrong
+            if (signInError.message.includes('Invalid login credentials') && 
+                !signInError.message.includes('Email not confirmed')) {
+              setError('An account with this email already exists. Please sign in instead.')
+              setLoading(false)
+              return
+            }
+          }
+        } catch (signInCheckError) {
+          console.error('Error during email existence check:', signInCheckError)
+          // Continue with signup, will fail if email exists
+        }
+        
+        // If we get here, either the email doesn't exist or we couldn't check properly
+        // We'll still let Supabase's signUp method do the final check
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -26,6 +50,13 @@ export default function Login() {
         console.log('Signup response:', { data, error })
         
         if (error) {
+          // If this specific error happens after our checks, it's likely the user already exists
+          if (error.message?.toLowerCase().includes('already registered') || 
+              error.message?.toLowerCase().includes('already exists') ||
+              error.message?.toLowerCase().includes('already taken')) {
+            setError('An account with this email already exists. Please sign in instead.')
+            return
+          }
           console.error('Signup error details:', error)
           throw error
         }
