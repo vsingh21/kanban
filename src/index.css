@@ -1,16 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: light;
+  color: #213547;
+  background-color: #f9fafb;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root.dark {
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #121212;
 }
 
 a {
@@ -24,10 +34,9 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  width: 100%;
 }
 
 h1 {
@@ -42,27 +51,57 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
   cursor: pointer;
   transition: border-color 0.25s;
 }
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+/* Custom utility classes */
+@layer components {
+  .kanban-column {
+    @apply bg-gray-50 rounded-lg p-4 border border-gray-200 shadow-sm min-h-[250px] h-full flex flex-col;
   }
-  a:hover {
-    color: #747bff;
+
+  .dark .kanban-column {
+    @apply bg-gray-800 border-gray-700;
   }
-  button {
-    background-color: #f9f9f9;
+
+  .kanban-task {
+    @apply bg-white p-4 rounded-lg shadow-md border border-gray-100 hover:shadow-lg transition-shadow duration-200 break-words;
+  }
+
+  .dark .kanban-task {
+    @apply bg-gray-700 border-gray-600 text-gray-100;
+  }
+
+  .form-input {
+    @apply w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500;
+  }
+
+  .dark .form-input {
+    @apply bg-gray-700 border-gray-600 text-white;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200;
+  }
+
+  .dark .btn-secondary {
+    @apply border-gray-600 text-gray-200 bg-gray-700 hover:bg-gray-600;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-lg border border-gray-100 p-5;
+  }
+
+  .dark .card {
+    @apply bg-gray-800 border-gray-700 text-white;
+  }
+
+  .layout-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full;
   }
 }
