@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { EllipsisVerticalIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
 
@@ -6,9 +7,10 @@ interface BoardMenuProps {
   boardId: string
   boardName: string
   onRename: (newName: string) => void
+  onDelete?: () => void
 }
 
-export default function BoardMenu({ boardId, boardName, onRename }: BoardMenuProps) {
+export default function BoardMenu({ boardId, boardName, onRename, onDelete }: BoardMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showRenameModal, setShowRenameModal] = useState(false)
@@ -17,6 +19,9 @@ export default function BoardMenu({ boardId, boardName, onRename }: BoardMenuPro
   const [renaming, setRenaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isOnBoardPage = location.pathname.includes('/board/')
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -47,7 +52,16 @@ export default function BoardMenu({ boardId, boardName, onRename }: BoardMenuPro
       
       // Close the modal after successful deletion
       setShowDeleteModal(false)
-      // The board will be removed from the list in the parent component via re-fetch
+      
+      // Call the onDelete callback if provided
+      if (onDelete) {
+        onDelete()
+      }
+      
+      // If we're on a board page, navigate back to the dashboard
+      if (isOnBoardPage) {
+        navigate('/dashboard')
+      }
     } catch (error) {
       console.error('Error deleting board:', error)
       setError('Failed to delete board. Please try again.')

@@ -16,11 +16,20 @@ export default function Login() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        console.log('Attempting signup with:', { email }) // Don't log password
+        
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         })
-        if (error) throw error
+        
+        console.log('Signup response:', { data, error })
+        
+        if (error) {
+          console.error('Signup error details:', error)
+          throw error
+        }
+        
         alert('Check your email for the confirmation link!')
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -30,6 +39,7 @@ export default function Login() {
         if (error) throw error
       }
     } catch (error) {
+      console.error('Auth error:', error)
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)

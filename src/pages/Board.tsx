@@ -139,14 +139,14 @@ const TaskCard = memo(({
             </div>
             <div className="flex space-x-2 ml-2">
               <button
-                onClick={() => onEdit(task)}
+                onClick={() => setEditingTask(task)}
                 className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
                 aria-label="Edit task"
               >
                 <PencilIcon className="h-4 w-4" />
               </button>
               <button
-                onClick={() => onDelete(task.id)}
+                onClick={() => handleDeleteTask(task.id)}
                 className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200"
                 aria-label="Delete task"
               >
@@ -235,14 +235,10 @@ export default function Board() {
   const [board, setBoard] = useState<Board | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
-  const [newTask, setNewTask] = useState<{
-    title: string;
-    description: string;
-    status: Task['status'];
-  }>({ 
-    title: '', 
-    description: '', 
-    status: 'todo' 
+  const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'created_at' | 'board_id'>>({
+    title: '',
+    description: '',
+    status: 'todo',
   })
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -324,7 +320,7 @@ export default function Board() {
         .from('tasks')
         .select('*')
         .eq('board_id', boardId)
-        .order('created_at', { ascending: true })
+        .order('position', { ascending: true })
 
       if (error) throw error
       
@@ -339,21 +335,21 @@ export default function Board() {
         return true;
       }) || [];
       
-      // If data is returned, sort by position if available, otherwise use the default order
-      const sortedData = validData.sort((a, b) => {
-        // If both have position, sort by position
-        if (a.position !== null && b.position !== null) {
-          return (a.position || 0) - (b.position || 0);
-        }
-        // If only one has position, prioritize the one with position
-        if (a.position !== null) return -1;
-        if (b.position !== null) return 1;
-        // Otherwise, sort by created_at
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
+      // Group tasks by status and sort each group by position
+      const todoTasks = validData.filter(task => task.status === 'todo')
+        .sort((a, b) => (a.position || 0) - (b.position || 0));
       
-      console.log("Sorted tasks with IDs:", sortedData.map(t => ({ id: t.id, title: t.title })));
-      setTasks(sortedData)
+      const inProgressTasks = validData.filter(task => task.status === 'in_progress')
+        .sort((a, b) => (a.position || 0) - (b.position || 0));
+      
+      const doneTasks = validData.filter(task => task.status === 'done')
+        .sort((a, b) => (a.position || 0) - (b.position || 0));
+      
+      // Combine all sorted tasks
+      const sortedData = [...todoTasks, ...inProgressTasks, ...doneTasks];
+      
+      console.log("Sorted tasks with IDs:", sortedData.map(t => ({ id: t.id, title: t.title, status: t.status, position: t.position })));
+      setTasks(sortedData);
     } catch (error) {
       console.error('Error fetching tasks:', error)
       setError('Failed to load tasks. Please try refreshing the page.')
@@ -451,25 +447,57 @@ export default function Board() {
     }
 
     // Create a new array for immutability
-    const newTasks = [...tasks];
+    let newTasks = [...tasks];
     
-    // Update the task's status and position
+    // Get all tasks in the source and destination columns
+    const sourceTasks = newTasks.filter(t => t.status === source.droppableId);
+    const destinationTasks = source.droppableId === destination.droppableId 
+      ? sourceTasks 
+      : newTasks.filter(t => t.status === destination.droppableId);
+    
+    // Create updated task with new status
     const updatedTask = {
       ...taskToMove,
       status: destination.droppableId as 'todo' | 'in_progress' | 'done',
     };
-
-    // Replace the old task with the updated one
-    const taskIndex = newTasks.findIndex(t => t.id === draggableId);
-    if (taskIndex !== -1) {
-      newTasks[taskIndex] = updatedTask;
+    
+    // Handle reordering within the same column
+    if (source.droppableId === destination.droppableId) {
+      // Create a copy of the tasks in this column
+      const columnTasks = [...sourceTasks];
+      
+      // Remove the task from its original position
+      columnTasks.splice(source.index, 1);
+      
+      // Insert the task at the new position
+      columnTasks.splice(destination.index, 0, updatedTask);
+      
+      // Update positions for all tasks in the column
+      const updatedColumnTasks = columnTasks.map((task, index) => ({
+        ...task,
+        position: index * 100
+      }));
+      
+      // Replace all tasks from this column in the main tasks array
+      newTasks = newTasks.filter(t => t.status !== source.droppableId);
+      newTasks = [...newTasks, ...updatedColumnTasks];
+    } else {
+      // Moving between columns
+      // Update the task in the tasks array
+      const taskIndex = newTasks.findIndex(t => t.id === draggableId);
+      if (taskIndex !== -1) {
+        newTasks[taskIndex] = {
+          ...updatedTask,
+          position: destination.index * 100
+        };
+      }
     }
     
     // Update the state immediately for better UX
     setTasks(newTasks);
     
     try {
-      // Update the task in the database
+      // Update the task's status and position in the database
       await supabase
         .from('tasks')
         .update({ 
@@ -477,6 +505,23 @@ export default function Board() {
           position: destination.index * 100
         })
         .eq('id', updatedTask.id);
+      
+      // If we're reordering within the same column, update all affected tasks' positions
+      if (source.droppableId === destination.droppableId) {
+        // Get the updated tasks for this column from our newTasks array
+        const updatedColumnTasks = newTasks.filter(t => t.status === source.droppableId);
+        
+        // Update other tasks' positions in batch if your API supports it
+        // For Supabase, we need to do them one by one
+        for (const task of updatedColumnTasks) {
+          if (task.id !== draggableId) { // Skip the task we already updated
+            await supabase
+              .from('tasks')
+              .update({ position: task.position })
+              .eq('id', task.id);
+          }
+        }
+      }
     } catch (error) {
       console.error('Failed to update task in database:', error);
       setError('Failed to update task position. Please try again.');
@@ -500,29 +545,29 @@ export default function Board() {
   }
 
   return (
-    <div className="py-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div className="py-8 px-4 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
           <button
             onClick={() => navigate('/dashboard')}
-            className="mr-3 inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
-            aria-label="Back to Dashboard"
+            className="mr-3 flex items-center text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
           >
             <ArrowLeftIcon className="h-5 w-5" />
+            <span className="ml-1 text-sm font-medium">Back to Dashboard</span>
           </button>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">{board?.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{board?.name || 'Loading...'}</h1>
         </div>
-        <div className="flex items-center space-x-3">
-          {isOwner && (
-            <BoardMenu 
-              boardId={boardId || ''} 
-              boardName={board?.name || 'Unnamed Board'} 
-              onRename={(newName) => {
-                setBoard(prev => prev ? {...prev, name: newName} : null)
-              }}
-            />
-          )}
+        <div className="flex items-center space-x-2">
           <ShareBoard boardId={boardId || ''} />
+          <BoardMenu 
+            boardId={boardId || ''} 
+            boardName={board?.name || ''} 
+            onRename={(newName) => setBoard(board => board ? { ...board, name: newName } : null)}
+            onDelete={() => {
+              // The BoardMenu component will handle navigation back to dashboard
+              console.log('Board deleted, navigation handled by BoardMenu')
+            }}
+          />
         </div>
       </div>
 
@@ -601,17 +646,138 @@ export default function Board() {
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {Object.entries(COLUMNS).map(([status, title]) => (
-            <TaskColumn 
-              key={status} 
-              status={status} 
-              title={title} 
-              tasks={tasks}
-              editingTask={editingTask}
-              handleUpdateTask={handleUpdateTask}
-              setEditingTask={setEditingTask}
-              onEdit={(task) => setEditingTask(task)}
-              onDelete={(id) => handleDeleteTask(id)}
-            />
+            <div key={status} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <span className={`w-3 h-3 rounded-full mr-2 ${
+                  status === 'todo' ? 'bg-yellow-400 dark:bg-yellow-500' : 
+                  status === 'in_progress' ? 'bg-blue-400 dark:bg-blue-500' : 
+                  'bg-green-400 dark:bg-green-500'
+                }`}></span>
+                {title}
+                <span className="ml-2 text-sm text-gray-500 dark:text-gray-400 font-normal">
+                  ({tasks.filter(t => t.status === status).length})
+                </span>
+              </h2>
+              <StrictModeDroppable droppableId={status}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`space-y-4 min-h-[150px] rounded-md transition-colors duration-200 ${
+                      snapshot.isDraggingOver ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                    }`}
+                  >
+                    {tasks
+                      .filter(task => task.status === status)
+                      .sort((a, b) => (a.position || 0) - (b.position || 0))
+                      .map((task, index) => (
+                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className={`bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md border border-gray-100 dark:border-gray-600 hover:shadow-lg transition-all duration-200 ${
+                                snapshot.isDragging ? 'shadow-xl ring-2 ring-indigo-500 dark:ring-indigo-400 opacity-90' : ''
+                              }`}
+                            >
+                              {editingTask?.id === task.id ? (
+                                <div className="space-y-3">
+                                  <div>
+                                    <label htmlFor="edit-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Title
+                                    </label>
+                                    <input
+                                      id="edit-title"
+                                      type="text"
+                                      value={editingTask.title}
+                                      onChange={(e) =>
+                                        setEditingTask({
+                                          ...editingTask,
+                                          title: e.target.value,
+                                        })
+                                      }
+                                      className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-800 dark:text-white transition-colors duration-200"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Description
+                                    </label>
+                                    <input
+                                      id="edit-description"
+                                      type="text"
+                                      value={editingTask.description}
+                                      onChange={(e) =>
+                                        setEditingTask({
+                                          ...editingTask,
+                                          description: e.target.value,
+                                        })
+                                      }
+                                      className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-800 dark:text-white transition-colors duration-200"
+                                    />
+                                  </div>
+                                  <div className="flex justify-end space-x-2 pt-2">
+                                    <button
+                                      onClick={() => handleUpdateTask(editingTask)}
+                                      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm font-medium transition-colors duration-200"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingTask(null)}
+                                      className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-sm transition-colors duration-200"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex items-start gap-2">
+                                      <span 
+                                        className="text-gray-400 dark:text-gray-500 mt-0.5 cursor-grab"
+                                        {...provided.dragHandleProps}
+                                      >
+                                        <Bars3Icon className="h-4 w-4" />
+                                      </span>
+                                      <h3 className="text-sm font-medium text-gray-900 dark:text-white break-words">
+                                        {task.title}
+                                      </h3>
+                                    </div>
+                                    <div className="flex space-x-2 ml-2">
+                                      <button
+                                        onClick={() => setEditingTask(task)}
+                                        className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
+                                        aria-label="Edit task"
+                                      >
+                                        <PencilIcon className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200"
+                                        aria-label="Delete task"
+                                      >
+                                        <TrashIcon className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {task.description && (
+                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 break-words">
+                                      {task.description}
+                                    </p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </StrictModeDroppable>
+            </div>
           ))}
         </div>
       </DragDropContext>

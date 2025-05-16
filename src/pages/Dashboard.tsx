@@ -121,7 +121,12 @@ export default function Dashboard() {
         .select()
         .single()
       if (error) throw error
-      setBoards([data, ...boards])
+      
+      // Add the is_owner flag to the new board
+      const newBoard = { ...data, is_owner: true }
+      
+      // Add the new board to the beginning of the boards array
+      setBoards([newBoard, ...boards])
       setNewBoardName('')
       setShowNewBoardForm(false)
     } catch (error) {
@@ -134,6 +139,11 @@ export default function Dashboard() {
     setBoards(boards.map(board => 
       board.id === boardId ? { ...board, name: newName } : board
     ))
+  }
+
+  const handleDeleteBoard = (boardId: string) => {
+    // Remove the board from state immediately for better user experience
+    setBoards(boards.filter(board => board.id !== boardId))
   }
 
   if (loading) {
@@ -207,13 +217,13 @@ export default function Dashboard() {
           {boards.filter(board => board.is_owner).map((board) => (
             <div
               key={board.id}
-              className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-all duration-200 border border-gray-100 dark:border-gray-700 hover:border-indigo-100 dark:hover:border-indigo-900 cursor-pointer"
+              className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-all duration-200 border border-gray-100 dark:border-gray-700 hover:border-indigo-100 dark:hover:border-indigo-900 cursor-pointer min-h-[180px] flex flex-col"
               onClick={() => navigate(`/board/${board.id}`)}
             >
-              <div className="px-6 py-5">
+              <div className="px-8 py-6 flex-1 flex flex-col">
                 <div className="flex justify-between items-start">
                   <h3 
-                    className="text-lg font-semibold text-gray-900 dark:text-white mb-2"
+                    className="text-xl font-semibold text-gray-900 dark:text-white mb-3"
                   >
                     {board.name}
                   </h3>
@@ -222,12 +232,18 @@ export default function Dashboard() {
                       boardId={board.id} 
                       boardName={board.name} 
                       onRename={(newName) => handleRenameBoard(board.id, newName)}
+                      onDelete={() => handleDeleteBoard(board.id)}
                     />
                   </div>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                   Created {new Date(board.created_at).toLocaleDateString()}
                 </p>
+                <div className="mt-auto pt-4">
+                  <div className="inline-flex items-center text-xs text-indigo-600 dark:text-indigo-400">
+                    <span>Click to open board</span>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -245,22 +261,23 @@ export default function Dashboard() {
             {boards.filter(board => !board.is_owner).map((board) => (
               <div
                 key={board.id}
-                className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-all duration-200 border border-indigo-100 dark:border-indigo-900 hover:border-indigo-200 dark:hover:border-indigo-800 cursor-pointer"
+                className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-all duration-200 border border-indigo-100 dark:border-indigo-900 hover:border-indigo-200 dark:hover:border-indigo-800 cursor-pointer min-h-[180px] flex flex-col"
                 onClick={() => navigate(`/board/${board.id}`)}
               >
-                <div className="px-6 py-5">
-                  <h3 
-                    className="text-lg font-semibold text-gray-900 dark:text-white mb-2"
-                  >
-                    {board.name}
-                  </h3>
-                  <div className="flex items-center text-sm text-indigo-500 dark:text-indigo-400 mb-2">
-                    <UserGroupIcon className="h-4 w-4 mr-1" />
-                    <span>Shared with you</span>
+                <div className="px-8 py-6 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                      {board.name}
+                    </h3>
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Created {new Date(board.created_at).toLocaleDateString()}
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    Shared with you
                   </p>
+                  <div className="mt-auto pt-4">
+                    <div className="inline-flex items-center text-xs text-indigo-600 dark:text-indigo-400">
+                      <span>Click to open board</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
