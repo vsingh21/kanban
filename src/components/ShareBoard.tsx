@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase'
 import { 
   UserPlusIcon,
   XMarkIcon,
-  CheckIcon,
   UserCircleIcon 
 } from '@heroicons/react/24/outline'
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, memo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { DragDropContext, Draggable } from 'react-beautiful-dnd'
-import type { DropResult, DraggableProvided, DroppableProvided, DraggableStateSnapshot, DroppableStateSnapshot } from 'react-beautiful-dnd'
+import type { DropResult } from 'react-beautiful-dnd'
 import { supabase } from '../lib/supabase'
 import { PlusIcon, TrashIcon, PencilIcon, ArrowLeftIcon, Bars3Icon } from '@heroicons/react/24/outline'
 import ShareBoard from '../components/ShareBoard'
@@ -247,7 +247,6 @@ export default function Board() {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
-  const [hasBoardAccess, setHasBoardAccess] = useState(false)
 
   useEffect(() => {
     if (boardId) {
@@ -285,8 +284,6 @@ export default function Board() {
       setIsOwner(boardData.user_id === user.id)
 
       if (boardData.user_id === user.id) {
-        // User is owner, they have access
-        setHasBoardAccess(true)
         fetchTasks()
         return
       }
@@ -306,7 +303,6 @@ export default function Board() {
 
       // If member data exists, user has access
       if (memberData) {
-        setHasBoardAccess(true)
         fetchTasks()
       } else {
         // User doesn't have access to this board
@@ -319,10 +315,6 @@ export default function Board() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const fetchBoard = async () => {
-    // Board data already fetched in checkBoardPermission
   }
 
   const fetchTasks = async () => {
