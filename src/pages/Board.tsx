@@ -35,19 +35,17 @@ const COLUMNS = {
 const TaskCard = memo(({ 
   task, 
   index, 
-  onEdit, 
-  onDelete, 
   editingTask, 
   handleUpdateTask, 
-  setEditingTask 
+  setEditingTask,
+  onDelete
 }: { 
   task: Task, 
   index: number, 
-  onEdit: (task: Task) => void, 
-  onDelete: (id: string) => void,
   editingTask: Task | null,
   handleUpdateTask: (task: Task) => void,
-  setEditingTask: (task: Task | null) => void
+  setEditingTask: (task: Task | null) => void,
+  onDelete: (id: string) => void
 }) => {
   if (editingTask?.id === task.id) {
     return (
@@ -146,7 +144,7 @@ const TaskCard = memo(({
                 <PencilIcon className="h-4 w-4" />
               </button>
               <button
-                onClick={() => handleDeleteTask(task.id)}
+                onClick={() => onDelete(task.id)}
                 className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200"
                 aria-label="Delete task"
               >
@@ -165,70 +163,6 @@ const TaskCard = memo(({
   );
 });
 
-// Update the TaskColumn component to use StrictModeDroppable
-const TaskColumn = ({ 
-  status, 
-  title, 
-  tasks, 
-  editingTask,
-  handleUpdateTask,
-  setEditingTask,
-  onEdit,
-  onDelete
-}: { 
-  status: string, 
-  title: string, 
-  tasks: Task[],
-  editingTask: Task | null,
-  handleUpdateTask: (task: Task) => void,
-  setEditingTask: (task: Task | null) => void,
-  onEdit: (task: Task) => void,
-  onDelete: (id: string) => void
-}) => {
-  const tasksInColumn = tasks.filter(task => task.status === status);
-  
-  return (
-    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
-      <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
-        <span className={`w-3 h-3 rounded-full mr-2 ${
-          status === 'todo' ? 'bg-yellow-400 dark:bg-yellow-500' : 
-          status === 'in_progress' ? 'bg-blue-400 dark:bg-blue-500' : 
-          'bg-green-400 dark:bg-green-500'
-        }`}></span>
-        {title}
-        <span className="ml-2 text-sm text-gray-500 dark:text-gray-400 font-normal">
-          ({tasksInColumn.length})
-        </span>
-      </h2>
-      <StrictModeDroppable droppableId={status}>
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`space-y-4 min-h-[150px] rounded-md transition-colors duration-200 ${
-              snapshot.isDraggingOver ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-            }`}
-          >
-            {tasksInColumn.map((task, index) => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
-                index={index}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                editingTask={editingTask}
-                handleUpdateTask={handleUpdateTask}
-                setEditingTask={setEditingTask}
-              />
-            ))}
-            {provided.placeholder}
-          </div>
-        )}
-      </StrictModeDroppable>
-    </div>
-  );
-};
-
 export default function Board() {
   const { boardId } = useParams<{ boardId: string }>()
   const navigate = useNavigate()
@@ -242,7 +176,6 @@ export default function Board() {
   })
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isOwner, setIsOwner] = useState(false)
 
   useEffect(() => {
     if (boardId) {
@@ -277,7 +210,6 @@ export default function Board() {
       }
 
       setBoard(boardData)
-      setIsOwner(boardData.user_id === user.id)
 
       if (boardData.user_id === user.id) {
         fetchTasks()
@@ -449,11 +381,8 @@ export default function Board() {
     // Create a new array for immutability
     let newTasks = [...tasks];
     
-    // Get all tasks in the source and destination columns
+    // Get all tasks in the source column
     const sourceTasks = newTasks.filter(t => t.status === source.droppableId);
-    const destinationTasks = source.droppableId === destination.droppableId 
-      ? sourceTasks 
-      : newTasks.filter(t => t.status === destination.droppableId);
     
     // Create updated task with new status
     const updatedTask = {
@@ -671,107 +600,15 @@ export default function Board() {
                       .filter(task => task.status === status)
                       .sort((a, b) => (a.position || 0) - (b.position || 0))
                       .map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className={`bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md border border-gray-100 dark:border-gray-600 hover:shadow-lg transition-all duration-200 ${
-                                snapshot.isDragging ? 'shadow-xl ring-2 ring-indigo-500 dark:ring-indigo-400 opacity-90' : ''
-                              }`}
-                            >
-                              {editingTask?.id === task.id ? (
-                                <div className="space-y-3">
-                                  <div>
-                                    <label htmlFor="edit-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                      Title
-                                    </label>
-                                    <input
-                                      id="edit-title"
-                                      type="text"
-                                      value={editingTask.title}
-                                      onChange={(e) =>
-                                        setEditingTask({
-                                          ...editingTask,
-                                          title: e.target.value,
-                                        })
-                                      }
-                                      className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-800 dark:text-white transition-colors duration-200"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                      Description
-                                    </label>
-                                    <input
-                                      id="edit-description"
-                                      type="text"
-                                      value={editingTask.description}
-                                      onChange={(e) =>
-                                        setEditingTask({
-                                          ...editingTask,
-                                          description: e.target.value,
-                                        })
-                                      }
-                                      className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-800 dark:text-white transition-colors duration-200"
-                                    />
-                                  </div>
-                                  <div className="flex justify-end space-x-2 pt-2">
-                                    <button
-                                      onClick={() => handleUpdateTask(editingTask)}
-                                      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm font-medium transition-colors duration-200"
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      onClick={() => setEditingTask(null)}
-                                      className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-sm transition-colors duration-200"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-2">
-                                      <span 
-                                        className="text-gray-400 dark:text-gray-500 mt-0.5 cursor-grab"
-                                        {...provided.dragHandleProps}
-                                      >
-                                        <Bars3Icon className="h-4 w-4" />
-                                      </span>
-                                      <h3 className="text-sm font-medium text-gray-900 dark:text-white break-words">
-                                        {task.title}
-                                      </h3>
-                                    </div>
-                                    <div className="flex space-x-2 ml-2">
-                                      <button
-                                        onClick={() => setEditingTask(task)}
-                                        className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
-                                        aria-label="Edit task"
-                                      >
-                                        <PencilIcon className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteTask(task.id)}
-                                        className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200"
-                                        aria-label="Delete task"
-                                      >
-                                        <TrashIcon className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {task.description && (
-                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 break-words">
-                                      {task.description}
-                                    </p>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
+                        <TaskCard 
+                          key={task.id} 
+                          task={task} 
+                          index={index}
+                          editingTask={editingTask}
+                          handleUpdateTask={handleUpdateTask}
+                          setEditingTask={setEditingTask}
+                          onDelete={handleDeleteTask}
+                        />
                       ))}
                     {provided.placeholder}
                   </div>
